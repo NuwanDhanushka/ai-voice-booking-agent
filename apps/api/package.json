@@ -1,0 +1,7 @@
+{
+  "name": "api",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build"
+  }
+}
