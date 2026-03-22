@@ -2,7 +2,7 @@
 
 import { VoiceControls } from './VoiceControls';
 import { VoiceHeader } from './VoiceHeader';
-import { VoiceOrb } from './VoiceOrb';
+import VoiceOrb from './VoiceOrb';
 
 type VoiceUiState =
     | 'idle'

@@ -1,11 +1,12 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
 type VoiceUiState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
-import { transcribeAudio, sendVoiceMessage, VoiceMessageResponse, AgentResponse } from '@/lib/api/client';
+import { transcribeAudio, sendVoiceMessage, AgentResponse } from '@/lib/api/client';
+import VoiceOrb, { stateColors, toRgba } from './VoiceOrb';
+import { AnimatedPromptText } from './AnimatedPromptText';
 
 type VoiceTurn = {
     id: string;
@@ -36,64 +37,11 @@ function getSubtitle(state: VoiceUiState) {
     }
 }
 
-function getScale(state: VoiceUiState) {
-    switch (state) {
-        case 'listening':
-            return 1.08;
-        case 'thinking':
-            return 0.96;
-        case 'speaking':
-            return 1.14;
-        case 'error':
-            return 0.92;
-        default:
-            return 1;
-    }
-}
-
 function formatTime(value: string) {
     return new Date(value).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
     });
-}
-
-function VoiceOrb({ state }: { state: VoiceUiState }) {
-    const scale = getScale(state);
-
-    return (
-        <div className="relative flex items-center justify-center">
-            <motion.div
-                animate={{
-                    scale: [1, scale, 1],
-                    rotate: [0, 8, -8, 0],
-                }}
-                transition={{
-                    duration: 3.5,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                }}
-                className="relative h-56 w-56 rounded-full"
-            >
-                <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.45),rgba(168,85,247,0.35),rgba(0,0,0,0.05))] blur-[2px]" />
-                <div className="absolute inset-2 rounded-full bg-[conic-gradient(from_0deg,rgba(236,72,153,0.9),rgba(139,92,246,0.9),rgba(244,114,182,0.9),rgba(236,72,153,0.9))] opacity-90 blur-[1px]" />
-                <div className="absolute inset-5 rounded-full bg-black/35 backdrop-blur-xl" />
-
-                <motion.div
-                    animate={{
-                        opacity: [0.45, 0.9, 0.45],
-                        scale: [0.9, 1.12, 0.9],
-                    }}
-                    transition={{
-                        duration: 2.2,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                    }}
-                    className="absolute -inset-5 rounded-full bg-fuchsia-500/20 blur-3xl"
-                />
-            </motion.div>
-        </div>
-    );
 }
 
 export function VoiceSessionScreen() {
@@ -107,6 +55,7 @@ export function VoiceSessionScreen() {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
     const [history, setHistory] = useState<VoiceTurn[]>([]);
+    const audioLevelRef = useRef<number>(0);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -130,6 +79,7 @@ export function VoiceSessionScreen() {
             stopSpeaking();
             stopTracks();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function stopAudioAnalysis() {
@@ -198,6 +148,7 @@ export function VoiceSessionScreen() {
             }
 
             const volume = getRmsVolume(analyser);
+            audioLevelRef.current = volume * 5; // Scale up volume to be more visible
 
             if (volume < SILENCE_THRESHOLD) {
                 if (silenceStartRef.current === null) {
@@ -444,149 +395,132 @@ export function VoiceSessionScreen() {
             </div>
 
             {open ? (
-                <div className="fixed inset-0 z-50 bg-black">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_left,rgba(139,92,246,0.28),transparent_28%),radial-gradient(circle_at_right,rgba(168,85,247,0.28),transparent_28%)]" />
+                <div className="fixed inset-0 z-50 bg-black overflow-hidden tracking-tight">
+                    {/* Left Background Glow */}
+                    <div
+                        className="absolute top-1/2 -translate-y-1/2 -left-[400px] h-[1000px] w-[1000px] rounded-full blur-[140px] transition-colors duration-[2500ms] ease-in-out pointer-events-none"
+                        style={{ backgroundColor: toRgba(stateColors[state], 0.22) }}
+                    />
+                    {/* Right Background Glow */}
+                    <div
+                        className="absolute top-1/2 -translate-y-1/2 -right-[400px] h-[1000px] w-[1000px] rounded-full blur-[140px] transition-colors duration-[2500ms] ease-in-out pointer-events-none"
+                        style={{ backgroundColor: toRgba(stateColors[state], 0.22) }}
+                    />
 
-                    <div className="relative flex h-full flex-col">
-                        <div className="flex items-center justify-between px-6 pt-6">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    type="button"
-                                    onClick={handleClose}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
-                                >
-                                    ←
-                                </button>
-
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15">
-                                        <div className="h-6 w-6 rounded-full bg-gradient-to-br from-fuchsia-400 to-violet-500" />
-                                    </div>
-
-                                    <div>
-                                        <div className="text-lg font-semibold text-white">
-                                            Study Room Agent
-                                        </div>
-                                        <div className="text-sm text-white/60">{getSubtitle(state)}</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="rounded-full bg-white/10 px-3 py-2 text-xs text-white/70">
-                                {sessionId}
-                            </div>
+                    <div className="relative z-10 flex h-full flex-col">
+                        <div className="absolute bottom-6 right-6 rounded-full px-3 py-2 text-[10px] text-white/30 z-20 pointer-events-none">
+                            {sessionId}
                         </div>
 
-                        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-                            <VoiceOrb state={state} />
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="absolute top-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors z-50"
+                        >
+                            ✕
+                        </button>
 
-                            <div className="mt-10 max-w-3xl space-y-4">
-                                <div className="text-xl font-semibold text-white">
-                                    {transcript || 'Tap the mic and tell me what you want to book.'}
+                        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center w-full">
+                            <div className="flex flex-col items-center justify-center w-full max-w-3xl gap-12">
+                                <div className="flex flex-col h-[280px] items-center justify-center relative shrink-0">
+                                    <VoiceOrb state={state} audioLevelRef={audioLevelRef} />
+                                    <div className="absolute bottom-[-40px] text-sm tracking-[0.2em] font-medium text-white/50 uppercase w-full">
+                                        {getSubtitle(state)}
+                                    </div>
                                 </div>
 
-                                {assistantReply ? (
-                                    <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm leading-6 text-white/85">
-                                        {assistantReply}
-                                    </div>
-                                ) : null}
+                                <div className="text-xl font-semibold text-white min-h-[60px] flex w-full max-w-3xl items-center justify-center text-center shrink-0">
+                                    <AnimatedPromptText text={assistantReply || transcript || 'Tap the mic and tell me what you want to book.'} />
+                                </div>
 
-                                {bookingReference ? (
-                                    <div className="text-sm text-emerald-300">
-                                        Booking reference:{' '}
-                                        <span className="font-mono">{bookingReference}</span>
-                                    </div>
-                                ) : null}
+                                {((history && history.length > 0) || (slots && slots.length > 0) || bookingReference || errorMessage) ? (
+                                    <div className="w-[600px] max-w-full h-[220px] shrink-0 rounded-[2rem] bg-black/20 backdrop-blur-[24px] border border-white/10 p-6 shadow-2xl flex flex-col gap-6 text-left overflow-y-auto no-scrollbar">
+                                        {bookingReference ? (
+                                            <div className="text-sm text-emerald-300 px-2 shrink-0">
+                                                Booking reference:{' '}
+                                                <span className="font-mono">{bookingReference}</span>
+                                            </div>
+                                        ) : null}
 
-                                {history.length > 0 ? (
-                                    <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-                                        <div className="mb-3 text-sm font-medium text-white/80">
-                                            Conversation
-                                        </div>
-                                        <div className="max-h-56 space-y-3 overflow-y-auto">
-                                            {history.map((item) => (
-                                                <div
-                                                    key={item.id}
-                                                    className={`rounded-xl px-4 py-3 text-sm leading-6 ${
-                                                        item.role === 'user'
-                                                            ? 'bg-fuchsia-500/15 text-white'
-                                                            : 'bg-black/25 text-white/85'
-                                                    }`}
-                                                >
-                                                    <div className="mb-1 text-[11px] uppercase tracking-wide text-white/50">
-                                                        {item.role}
-                                                    </div>
-                                                    <div>{item.text}</div>
+                                        {history && history.length > 0 ? (
+                                            <div className="space-y-6 px-2 shrink-0">
+                                                {history.map((item) => {
+                                                    const isUser = item.role === 'user';
+                                                    return (
+                                                        <div
+                                                            key={item.id}
+                                                            className={`flex flex-col text-sm leading-relaxed ${isUser ? 'items-end text-right' : 'items-start text-left'}`}
+                                                        >
+                                                            <div className={`mb-1 text-[11px] uppercase tracking-widest font-semibold ${isUser ? 'text-fuchsia-400' : 'text-violet-400'}`}>
+                                                                {item.role}
+                                                            </div>
+                                                            <div className="text-white/90">
+                                                                {item.text}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : null}
+
+                                        {slots && slots.length > 0 ? (
+                                            <div className="px-2 shrink-0">
+                                                <div className="mb-3 text-[11px] uppercase tracking-widest font-semibold text-white/50">
+                                                    Available slots
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : null}
-
-                                {slots && slots.length > 0 ? (
-                                    <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-                                        <div className="mb-3 text-sm font-medium text-white/80">
-                                            Available slots
-                                        </div>
-                                        <div className="space-y-2">
-                                            {slots.slice(0, 5).map((slot, index) => (
-                                                <div
-                                                    key={`${slot.resourceId}-${slot.startTime}-${slot.endTime}`}
-                                                    className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/80"
-                                                >
-                                                    <div className="font-medium">
-                                                        {index + 1}. {slot.resourceName}
-                                                    </div>
-                                                    <div className="mt-1 text-white/60">
-                                                        {formatTime(slot.startTime)} to {formatTime(slot.endTime)}
-                                                    </div>
+                                                <div className="space-y-2">
+                                                    {slots.slice(0, 5).map((slot, index) => (
+                                                        <div
+                                                            key={`${slot.resourceId}-${slot.startTime}-${slot.endTime}`}
+                                                            className="rounded-xl border border-white/5 bg-white/5 px-4 py-3 text-sm text-white/80"
+                                                        >
+                                                            <div className="font-medium">
+                                                                {index + 1}. {slot.resourceName}
+                                                            </div>
+                                                            <div className="mt-1 text-white/60">
+                                                                {formatTime(slot.startTime)} to {formatTime(slot.endTime)}
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : null}
+                                            </div>
+                                        ) : null}
 
-                                {errorMessage ? (
-                                    <div className="text-sm text-red-400">{errorMessage}</div>
+                                        {errorMessage ? (
+                                            <div className="text-sm text-red-400 px-2 shrink-0">{errorMessage}</div>
+                                        ) : null}
+                                    </div>
                                 ) : null}
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-center gap-10 pb-10">
-                            <button
-                                type="button"
-                                onClick={handleReset}
-                                className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/80"
-                            >
-                                ↺
-                            </button>
-
+                        <div className="relative flex w-full items-center justify-center pb-10 pt-4">
                             <button
                                 type="button"
                                 onClick={() => void handleMicClick()}
-                                className={`flex h-20 w-20 items-center justify-center rounded-full text-3xl text-white shadow-[0_0_50px_rgba(217,70,239,0.45)] transition ${
-                                    isRecording
-                                        ? 'bg-red-500'
-                                        : 'bg-gradient-to-br from-pink-400 to-violet-500'
-                                }`}
+                                className="flex h-20 w-20 items-center justify-center rounded-full shadow-[0_0_50px_rgba(217,70,239,0.45)] transition relative overflow-hidden bg-gradient-to-br from-pink-400 to-violet-500 hover:scale-105 active:scale-95"
                             >
-                                {isRecording ? '■' : '🎤'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleClose}
-                                className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/80"
-                            >
-                                ✕
+                                {isRecording ? (
+                                    <img
+                                        src="/images/icons/cross.png"
+                                        alt="Stop"
+                                        className="h-8 w-8 brightness-0 invert opacity-90"
+                                    />
+                                ) : (
+                                    <img
+                                        src="/images/icons/microphone.png"
+                                        alt="Microphone"
+                                        className="h-8 w-8 brightness-0 invert opacity-90"
+                                    />
+                                )}
                             </button>
                         </div>
 
-                        {isRecording ? (
-                            <div className="pb-6 text-center text-sm text-fuchsia-300">
+                        <div className="h-12 w-full text-center text-sm tracking-wide font-light text-white/40 transition-opacity duration-500">
+                            <span className={isRecording ? "opacity-100" : "opacity-0 pointer-events-none"}>
                                 Listening... I’ll stop automatically when you finish speaking.
-                            </div>
-                        ) : null}
+                            </span>
+                        </div>
                     </div>
                 </div>
             ) : null}
